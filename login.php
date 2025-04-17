@@ -1,95 +1,99 @@
-<?php session_start();?>
 <?php
+session_start();
+include("server/connection.php");
 
-
-include("../server/connection.php");
-
-if(isset($_SESSION['admin_logged_in'])){
-    header('location: index.php');
+// Agar user login hai toh account page par redirect karo
+if (isset($_SESSION['logged_in'])) {
+    header('location: account.php');
     exit;
-
 }
 
 if (isset($_POST['login_btn'])) {
-    $email = $_POST['email'];
-    $password = md5($_POST['password']);
+    // **Sanitize Inputs**
+    $email = trim(htmlspecialchars($_POST['email']));
+    $password = trim($_POST['password']);
 
-    $stmt =  $conn->prepare('SELECT admin_id,admin_name,admin_email,admin_password FROM admins WHERE admin_email = ? AND admin_password = ? LIMIT 1');
+    //  **Validation Start** 
 
-    $stmt->bind_param('ss', $email, $password);
+    // Email aur password empty toh nahi hain?
+    if (empty($email) || empty($password)) {
+        header('location: login.php?error=Please fill in all fields');
+        exit;
+    }
 
-    if ($stmt->execute()) {
-        $stmt->bind_result($admin_id, $admin_name, $admin_email, $admin_password);
-        $stmt->store_result();
+    // Email validation
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        header('location: login.php?error=Invalid email format');
+        exit;
+    }
 
-        if ($stmt->num_rows() == 1) {
-            $stmt->fetch();
+    // **Check if user exists**
+    $stmt = $conn->prepare('SELECT user_id, user_name, user_email, user_password FROM users WHERE user_email = ? LIMIT 1');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $stmt->bind_result($user_id, $user_name, $user_email, $hashed_password);
+    $stmt->store_result();
 
-            $_SESSION['admin_id'] = $admin_id;
-            $_SESSION['admin_name'] = $admin_name;
-            $_SESSION['admin_email'] = $admin_email;
-            $_SESSION['admin_logged_in'] = true;
+    if ($stmt->num_rows() == 1) {
+        $stmt->fetch();
 
-            header('location:index.php?login_success=logged in successfully');
-        }else{
-            header('location:login.php?error=could not verify your account');
+        // **Verify Password Securely**
+        if (password_verify($password, $hashed_password)) {
+            $_SESSION['user_id'] = $user_id;
+            $_SESSION['user_name'] = $user_name;
+            $_SESSION['user_email'] = $user_email;
+            $_SESSION['logged_in'] = true;
+
+            header('location: account.php?login_success=Logged in successfully');
+            exit;
+        } else {
+            header('location: login.php?error=Incorrect password');
+            exit;
         }
     } else {
-        // error
-        header('location:login.php?error=something went wrong');
+        header('location: login.php?error=User does not exist');
+        exit;
     }
 }
-
-
 ?>
 
 
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f8f9fa;
-        }
-        .login-card {
-            width: 100%;
-            max-width: 400px;
-            padding: 2rem;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            background-color: #fff;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-card">
-        <h2 class="text-center mb-4">Admin Login</h2>
-        <form action="login.php" method="POST">
-            <p style="color:red;"><?php if(isset($_GET['error'])){ echo $_GET['error'];}?></p>
-            <div class="mb-3">
-                <label for="email" class="form-label">Email address</label>
-                <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required />
-            </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required />
-            </div>
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary" name="login_btn" value="Login">Login</button>
-            </div>
-        </form>
-        
-    </div>
+<?php include("layout/header.php");?>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    <!-- login -->
+    <section class="my-5 py-5">
+        <div class="container text-center mt-3 pt-5">
+            <h2 class="form-weight-bold">Login</h2>
+            <hr class="mx-auto">
+        </div>
+        <div class="mx-auto container">
+            <p style="color:red;" class="text-center"><?php if (isset($_GET['error'])) {
+                                                            echo $_GET['error'];
+                                                        } ?></p>
+            <form id="Login-form" method="POST" action="login.php">
+                <div class="from-group">
+                    <label>Email</label>
+                    <input type="text" class="form-control" id="login-email" name="email" placeholder="Email" required />
+                </div>
+                <div class="from-group">
+                    <label>Password</label>
+                    <input type="password" class="form-control" id="login-password" name="password" placeholder="password" required />
+                </div>
+
+                <div class="from-group">
+                    <input type="Submit" class="btn" id="login-btn" name="login_btn" value="Login" />
+                </div>
+
+                <div class="from-group">
+                    <a id="register-url" href="register.php" class="btn">Don't have account? Register</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+
+
+
+
+    <?php include("layout/footer.php");?>
